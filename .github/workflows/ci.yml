@@ -1,24 +1,108 @@
-name: Test modified CFG blocks
+name: Differential Blockmap Testing
 
 on:
   push:
     branches:
       - main
-  pull_request:
 
 jobs:
-  test:
+  differential-test:
     runs-on: ubuntu-latest
+
+    env:
+      DOCKER_IMAGE: sonnyz789123/pathcov-image:2.6.1
+      SHARED_DIR: shared
+
+      # Common variables for blockmap generation
+      CLASS_PATH: /sut/target/classes
+      FULLY_QUALIFIED_METHOD_SIGNATURE: "<com.kuleuven.diff.BlockDiffExample: int foo(int)>"
+      PROJECT_PREFIXES: "com.kuleuven.diff"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create shared directory
+        run: mkdir -p $SHARED_DIR
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
 
-      - name: Run Maven tests
-        run: mvn test
+      # ------------------------------------------------------------
+      # Build NEW commit
+      # ------------------------------------------------------------
+      - name: Build project (new commit)
+        run: mvn -q -DskipTests package
+
+      - name: Generate blockmap (new commit)
+        run: |
+          docker pull $DOCKER_IMAGE
+
+          docker run --rm \
+            -v ${{ github.workspace }}:/sut \
+            -v ${{ github.workspace }}/$SHARED_DIR:/shared \
+            -e CLASS_PATH=$CLASS_PATH \
+            -e FULLY_QUALIFIED_METHOD_SIGNATURE="$FULLY_QUALIFIED_METHOD_SIGNATURE" \
+            -e PROJECT_PREFIXES="$PROJECT_PREFIXES" \
+            -e BLOCK_MAP_PATH=/shared/blockmap_new.json \
+            $DOCKER_IMAGE \
+            bash -c "/block-diff/scripts/generate_block_map.sh"
+
+      # ------------------------------------------------------------
+      # Checkout PREVIOUS commit
+      # ------------------------------------------------------------
+      - name: Checkout previous commit
+        run: |
+          git checkout ${{ github.event.before }}
+          mvn -q -DskipTests package
+
+      - name: Generate blockmap (old commit)
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/sut \
+            -v ${{ github.workspace }}/$SHARED_DIR:/shared \
+            -e CLASS_PATH=$CLASS_PATH \
+            -e FULLY_QUALIFIED_METHOD_SIGNATURE="$FULLY_QUALIFIED_METHOD_SIGNATURE" \
+            -e PROJECT_PREFIXES="$PROJECT_PREFIXES" \
+            -e BLOCK_MAP_PATH=/shared/blockmap_old.json \
+            $DOCKER_IMAGE \
+            bash -c "/block-diff/scripts/generate_block_map.sh"
+
+      # ------------------------------------------------------------
+      # Restore latest commit
+      # ------------------------------------------------------------
+      - name: Restore latest commit
+        run: |
+          git checkout $GITHUB_SHA
+          mvn -q -DskipTests package
+
+      # ------------------------------------------------------------
+      # Generate block diff
+      # ------------------------------------------------------------
+      - name: Generate block diff
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/$SHARED_DIR:/shared \
+            -e PREVIOUS_BLOCK_MAP_PATH=/shared/blockmap_old.json \
+            -e MODIFIED_BLOCK_MAP_PATH=/shared/blockmap_new.json \
+            -e BLOCK_DIFF_OUTPUT_PATH=/shared/block_diff.json \
+            $DOCKER_IMAGE \
+            bash -c "/block-diff/scripts/generate_block_diff.sh"
+
+      # ------------------------------------------------------------
+      # Run selective JUnit tests
+      # ------------------------------------------------------------
+      - name: Run selective JUnit tests
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/sut \
+            -v ${{ github.workspace }}/$SHARED_DIR:/shared \
+            -e TEST_CLASS_PATH=/sut/target/classes:/sut/target/test-classes \
+            -e BLOCK_DIFF_OUTPUT_PATH=/shared/block_diff.json \
+            $DOCKER_IMAGE \
+            bash -c "/block-diff/scripts/run_junit_tests.sh"
