@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DOCKER_IMAGE: sonnyz789123/pathcov-image:2.6.1
+      DOCKER_IMAGE: sonnyz789123/block-diff-image:latest
       SHARED_DIR: shared
 
       # Common variables for blockmap generation
