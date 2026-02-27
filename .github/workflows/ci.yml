@@ -1,12 +1,13 @@
-name: Differential Blockmap Testing
+name: Differential Blockmap Testing (vs main)
 
 on:
-  push:
-    branches:
-      - main
+  push: {}
 
 jobs:
   differential-test:
+    # to avoid “main vs main” runs
+    if: github.ref != 'refs/heads/main'
+
     runs-on: ubuntu-latest
 
     env:
@@ -19,13 +20,15 @@ jobs:
       PROJECT_PREFIXES: "com.kuleuven.diff"
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (pushed commit)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Create shared directory
-        run: mkdir -p $SHARED_DIR
+        run: |
+          mkdir -p "$SHARED_DIR"
+          rm -rf "${SHARED_DIR:?}/"*
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -34,14 +37,14 @@ jobs:
           java-version: 17
 
       # ------------------------------------------------------------
-      # Build NEW commit
+      # NEW = pushed commit (GITHUB_SHA)
       # ------------------------------------------------------------
       - name: Build project (new commit)
         run: mvn -q -DskipTests package
 
       - name: Generate blockmap (new commit)
         run: |
-          docker pull $DOCKER_IMAGE
+          docker pull "$DOCKER_IMAGE"
 
           docker run --rm \
             -v ${{ github.workspace }}:/sut \
@@ -50,18 +53,19 @@ jobs:
             -e FULLY_QUALIFIED_METHOD_SIGNATURE="$FULLY_QUALIFIED_METHOD_SIGNATURE" \
             -e PROJECT_PREFIXES="$PROJECT_PREFIXES" \
             -e BLOCK_MAP_PATH=/shared/blockmap_new.json \
-            $DOCKER_IMAGE \
-            bash -c "/block-diff/scripts/generate_block_map.sh"
+            "$DOCKER_IMAGE" \
+            bash -c "bash /block-diff/scripts/generate_block_map.sh"
 
       # ------------------------------------------------------------
-      # Checkout PREVIOUS commit
+      # OLD = origin/main
       # ------------------------------------------------------------
-      - name: Checkout previous commit
+      - name: Checkout origin/main
         run: |
-          git checkout ${{ github.event.before }}
+          git fetch origin main:refs/remotes/origin/main
+          git checkout origin/main
           mvn -q -DskipTests package
 
-      - name: Generate blockmap (old commit)
+      - name: Generate blockmap (main)
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/sut \
@@ -70,15 +74,15 @@ jobs:
             -e FULLY_QUALIFIED_METHOD_SIGNATURE="$FULLY_QUALIFIED_METHOD_SIGNATURE" \
             -e PROJECT_PREFIXES="$PROJECT_PREFIXES" \
             -e BLOCK_MAP_PATH=/shared/blockmap_old.json \
-            $DOCKER_IMAGE \
-            bash -c "/block-diff/scripts/generate_block_map.sh"
+            "$DOCKER_IMAGE" \
+            bash -c "bash /block-diff/scripts/generate_block_map.sh"
 
       # ------------------------------------------------------------
-      # Restore latest commit
+      # Restore pushed commit
       # ------------------------------------------------------------
-      - name: Restore latest commit
+      - name: Restore pushed commit
         run: |
-          git checkout $GITHUB_SHA
+          git checkout "$GITHUB_SHA"
           mvn -q -DskipTests package
 
       # ------------------------------------------------------------
@@ -91,11 +95,11 @@ jobs:
             -e PREVIOUS_BLOCK_MAP_PATH=/shared/blockmap_old.json \
             -e MODIFIED_BLOCK_MAP_PATH=/shared/blockmap_new.json \
             -e BLOCK_DIFF_OUTPUT_PATH=/shared/block_diff.json \
-            $DOCKER_IMAGE \
-            bash -c "/block-diff/scripts/generate_block_diff.sh"
+            "$DOCKER_IMAGE" \
+            bash -c "bash /block-diff/scripts/generate_block_diff.sh"
 
       # ------------------------------------------------------------
-      # Run selective JUnit tests
+      # Run selective JUnit tests (your script already skips if no changes)
       # ------------------------------------------------------------
       - name: Run selective JUnit tests
         run: |
@@ -104,5 +108,5 @@ jobs:
             -v ${{ github.workspace }}/$SHARED_DIR:/shared \
             -e TEST_CLASS_PATH=/sut/target/classes:/sut/target/test-classes \
             -e BLOCK_DIFF_OUTPUT_PATH=/shared/block_diff.json \
-            $DOCKER_IMAGE \
-            bash -c "/block-diff/scripts/run_junit_tests.sh"
+            "$DOCKER_IMAGE" \
+            bash -c "bash /block-diff/scripts/run_junit_tests.sh"
