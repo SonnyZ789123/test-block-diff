@@ -78,7 +78,7 @@ public class BlockDiffExample {
             return transform(simple(x));
         } else {
             if (x % 3 == 0) {
-                return combine(x, adjust(x));
+                return combine(x, adjustReworked(x));
             } else {
                 return helper(transform(x));
             }
