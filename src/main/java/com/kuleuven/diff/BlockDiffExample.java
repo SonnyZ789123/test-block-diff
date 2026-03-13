@@ -42,6 +42,13 @@ public class BlockDiffExample {
         }
     }
 
+    private static int adjustReworked(int x) {
+        int div = x / 5;
+        int r = div * x;
+
+        return div * r == 0 ? 5 : 1;
+    }
+
     private static int helper(int x) {
         if (x > 5) {
             return x + 3;
