@@ -1,6 +1,5 @@
-package com.kuleuven.diff;
+package com.kuleuven.example;
 
-import com.kuleuven.example.EdgeCoverageExample;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
