@@ -10,7 +10,7 @@ public class BlockDiffExample {
 
     public static int foo(int x) {
         if (x < 0) {
-            return transform(x) - adjustReworked(x);
+            return transform(x) - adjust(x);
         }
 
         if (x == 0) {
@@ -38,7 +38,7 @@ public class BlockDiffExample {
         if (x % 5 == 0) {
             return 5;
         } else {
-            return 1;
+            return 2;
         }
     }
 
