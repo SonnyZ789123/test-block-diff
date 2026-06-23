@@ -38,7 +38,7 @@ public class BlockDiffExample {
         if (x % 5 == 0) {
             return 5;
         } else {
-            return 2;
+            return 1;
         }
     }
 
