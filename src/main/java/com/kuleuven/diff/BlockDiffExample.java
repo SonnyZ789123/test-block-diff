@@ -10,7 +10,7 @@ public class BlockDiffExample {
 
     public static int foo(int x) {
         if (x < 0) {
-            return transform(x) - adjust(x);
+            return transform(x) - adjustReworked(x);
         }
 
         if (x == 0) {
